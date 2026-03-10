@@ -1,4 +1,4 @@
-GitHub Pagesにアップ済みの場合は、index.html だけ新しいファイルに差し替えてください！<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
@@ -96,6 +96,49 @@ GitHub Pagesにアップ済みの場合は、index.html だけ新しいファイ
     font-size: 0.78rem;
     color: var(--muted);
     letter-spacing: 0.15em;
+    margin-top: 6px;
+  }
+
+  .base-select-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 14px;
+    padding: 8px 16px;
+    border: 1px solid rgba(184,148,63,0.4);
+    background: var(--card-bg);
+  }
+
+  .base-select-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  .base-select {
+    font-family: 'Noto Serif JP', serif;
+    font-size: 0.82rem;
+    letter-spacing: 0.1em;
+    color: var(--ink);
+    background: transparent;
+    border: none;
+    outline: none;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: 22px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23b8943f' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 2px center;
+  }
+
+  .base-date-result {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--accent);
+    letter-spacing: 0.1em;
     margin-top: 6px;
   }
 
@@ -319,6 +362,19 @@ GitHub Pagesにアップ済みの場合は、index.html だけ新しいファイ
       <h1>営 業 日 計 算</h1>
     </div>
     <div class="today-badge" id="todayBadge"></div>
+
+    <div class="base-select-wrap">
+      <span class="base-select-label">起算日</span>
+      <select class="base-select" id="baseOffset" onchange="render()">
+        <option value="0">今日</option>
+        <option value="1">1日前</option>
+        <option value="2">2日前</option>
+        <option value="3">3日前</option>
+        <option value="4">4日前</option>
+        <option value="5">5日前</option>
+      </select>
+    </div>
+    <div class="base-date-result" id="baseDateResult"></div>
     <br>
     <button class="refresh-btn" onclick="render()">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -401,14 +457,29 @@ function render() {
   const today = new Date();
   today.setHours(0,0,0,0);
 
+  // 起算日オフセット（0=今日, 1=1日前, ...）
+  const offset = parseInt(document.getElementById('baseOffset').value) || 0;
+  const base = new Date(today);
+  base.setDate(base.getDate() - offset);
+
+  // 今日の日付表示
   document.getElementById('todayBadge').textContent =
     `TODAY  /  ${today.getFullYear()}年${today.getMonth()+1}月${today.getDate()}日（${WD_JP[today.getDay()]}）`;
+
+  // 起算日表示
+  const baseResult = document.getElementById('baseDateResult');
+  if (offset === 0) {
+    baseResult.textContent = '';
+  } else {
+    baseResult.textContent =
+      `起算日：${base.getFullYear()}年${base.getMonth()+1}月${base.getDate()}日（${WD_JP[base.getDay()]}）`;
+  }
 
   const el = document.getElementById('cards');
   el.innerHTML = '';
 
   [9, 11, 13, 15].forEach(n => {
-    const date = addBusinessDays(today, n);
+    const date = addBusinessDays(base, n);
     const wd = date.getDay();
     const wdKey = ['sun','mon','tue','wed','thu','fri','sat'][wd];
     const jpStr = `${date.getFullYear()}年${date.getMonth()+1}月${date.getDate()}日`;
