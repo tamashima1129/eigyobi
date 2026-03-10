@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>営業日カレンダー</title>
+
+<!-- PWA設定 -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1a1410">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="営業日">
+<link rel="apple-touch-icon" href="icon-192.png">
+
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@300;400;600&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1a1410;
+    --paper: #f5f0e8;
+    --accent: #c0392b;
+    --gold: #b8943f;
+    --muted: #8a7d6b;
+    --card-bg: #faf7f2;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Noto Serif JP', serif;
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: max(24px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(180,160,120,0.12) 39px, rgba(180,160,120,0.12) 40px),
+      repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(180,160,120,0.08) 39px, rgba(180,160,120,0.08) 40px);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .wrapper {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 680px;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 40px;
+  }
+
+  .logo-line {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    margin-bottom: 8px;
+  }
+
+  .logo-line::before,
+  .logo-line::after {
+    content: '';
+    height: 1px;
+    width: 60px;
+    background: linear-gradient(90deg, transparent, var(--gold));
+  }
+  .logo-line::after {
+    background: linear-gradient(90deg, var(--gold), transparent);
+  }
+
+  h1 {
+    font-size: clamp(1.1rem, 3vw, 1.4rem);
+    font-weight: 300;
+    letter-spacing: 0.35em;
+    color: var(--ink);
+  }
+
+  .today-badge {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--muted);
+    letter-spacing: 0.15em;
+    margin-top: 6px;
+  }
+
+  .refresh-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 18px;
+    padding: 10px 28px;
+    background: var(--ink);
+    color: var(--paper);
+    border: none;
+    font-family: 'Noto Serif JP', serif;
+    font-size: 0.82rem;
+    letter-spacing: 0.2em;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    position: relative;
+    overflow: hidden;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .refresh-btn::after {
+    content: '';
+    position: absolute;
+    left: 0; top: 0;
+    width: 100%; height: 100%;
+    background: var(--accent);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.3s ease;
+    z-index: 0;
+  }
+
+  .refresh-btn:hover::after,
+  .refresh-btn:active::after { transform: scaleX(1); }
+  .refresh-btn span { position: relative; z-index: 1; }
+
+  .refresh-btn svg {
+    position: relative;
+    z-index: 1;
+    transition: transform 0.5s ease;
+  }
+  .refresh-btn:hover svg,
+  .refresh-btn:active svg { transform: rotate(360deg); }
+
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+
+  @media (max-width: 460px) {
+    .cards { grid-template-columns: 1fr; }
+  }
+
+  .card {
+    background: var(--card-bg);
+    border: 1px solid rgba(180,160,120,0.3);
+    padding: 28px 24px 24px;
+    position: relative;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeUp 0.5s forwards;
+    box-shadow: 3px 3px 0 rgba(180,160,120,0.2);
+  }
+
+  .card:nth-child(1) { animation-delay: 0.1s; }
+  .card:nth-child(2) { animation-delay: 0.2s; }
+  .card:nth-child(3) { animation-delay: 0.3s; }
+  .card:nth-child(4) { animation-delay: 0.4s; }
+
+  @keyframes fadeUp {
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .card-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.2em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .card-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: rgba(180,160,120,0.35);
+  }
+
+  .card-days {
+    font-family: 'DM Mono', monospace;
+    font-size: clamp(2.8rem, 8vw, 3.8rem);
+    font-weight: 300;
+    line-height: 1;
+    color: var(--ink);
+    margin-bottom: 16px;
+  }
+
+  .card-days sup {
+    font-size: 0.35em;
+    color: var(--muted);
+    margin-left: 2px;
+    vertical-align: super;
+  }
+
+  .card-date-jp {
+    font-size: 1.05rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    color: var(--ink);
+    margin-bottom: 4px;
+  }
+
+  .card-date-en {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+  }
+
+  .card-weekday {
+    display: inline-block;
+    margin-top: 12px;
+    padding: 3px 10px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    border: 1px solid currentColor;
+  }
+
+  .weekday-mon, .weekday-tue, .weekday-wed,
+  .weekday-thu, .weekday-fri {
+    color: var(--gold);
+    border-color: rgba(184,148,63,0.5);
+  }
+
+  .card-corner {
+    position: absolute;
+    top: 12px;
+    right: 14px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.62rem;
+    color: var(--accent);
+    letter-spacing: 0.1em;
+  }
+
+  .card-process {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(180,160,120,0.3);
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    line-height: 1.7;
+  }
+
+  .card-process span {
+    display: inline-block;
+    background: rgba(192,57,43,0.08);
+    padding: 1px 7px;
+    margin: 2px 3px 2px 0;
+    border-left: 2px solid var(--accent);
+  }
+
+  .divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gold) 30%, var(--gold) 70%, transparent);
+    margin: 36px 0;
+    opacity: 0.5;
+  }
+
+  .note {
+    text-align: center;
+    font-size: 0.72rem;
+    color: var(--muted);
+    letter-spacing: 0.12em;
+    line-height: 1.9;
+  }
+
+  .note strong {
+    color: var(--accent);
+    font-weight: 400;
+  }
+
+  /* PWAインストール案内バナー */
+  #install-banner {
+    display: none;
+    position: fixed;
+    bottom: max(16px, env(safe-area-inset-bottom));
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--ink);
+    color: var(--paper);
+    padding: 12px 20px;
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    z-index: 100;
+    white-space: nowrap;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    cursor: pointer;
+    animation: slideUp 0.4s ease;
+  }
+
+  @keyframes slideUp {
+    from { transform: translateX(-50%) translateY(20px); opacity: 0; }
+    to   { transform: translateX(-50%) translateY(0);    opacity: 1; }
+  }
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <header>
+    <div class="logo-line">
+      <h1>営 業 日 計 算</h1>
+    </div>
+    <div class="today-badge" id="todayBadge"></div>
+    <br>
+    <button class="refresh-btn" onclick="render()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="23 4 23 10 17 10"></polyline>
+        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+      </svg>
+      <span>更新する</span>
+    </button>
+  </header>
+
+  <div class="cards" id="cards"></div>
+
+  <div class="divider"></div>
+
+  <p class="note">
+    土曜・日曜・<strong>日本の祝日</strong>を除いた営業日で計算<br>
+    ホーム画面に追加するとアプリとして使えます
+  </p>
+</div>
+
+<!-- Androidのみ表示されるインストール案内 -->
+<div id="install-banner" onclick="installApp()">
+  ＋ ホーム画面にアプリを追加する
+</div>
+
+<script>
+// ── 祝日データ（内閣府公式） ──────────────────────────
+const HOLIDAYS_BY_YEAR = {
+  2026: [
+    '2026-01-01','2026-01-12','2026-02-11','2026-02-23',
+    '2026-03-20','2026-04-29','2026-05-03','2026-05-04',
+    '2026-05-05','2026-05-06','2026-07-20','2026-08-11',
+    '2026-09-21','2026-09-22','2026-09-23','2026-10-12',
+    '2026-11-03','2026-11-23',
+  ],
+  2027: [
+    '2027-01-01','2027-01-11','2027-02-11','2027-02-23',
+    '2027-03-21','2027-04-29','2027-05-03','2027-05-04',
+    '2027-05-05','2027-07-19','2027-08-11','2027-09-20',
+    '2027-09-23','2027-10-11','2027-11-03','2027-11-23',
+  ],
+};
+
+function getHolidays(year) {
+  return new Set(HOLIDAYS_BY_YEAR[year] || []);
+}
+
+function fmt(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function isNonBusinessDay(d, holidays) {
+  return d.getDay() === 0 || d.getDay() === 6 || holidays.has(fmt(d));
+}
+
+function addBusinessDays(start, n) {
+  const h = new Set([...getHolidays(start.getFullYear()), ...getHolidays(start.getFullYear()+1)]);
+  let d = new Date(start);
+  let count = 1;
+  while (count < n) {
+    d.setDate(d.getDate() + 1);
+    if (!isNonBusinessDay(d, h)) count++;
+  }
+  return d;
+}
+
+// ── 表示 ────────────────────────────────────────────
+const WD_JP = ['日','月','火','水','木','金','土'];
+const WD_EN = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+const MO_EN = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+
+const PROCESSES = {
+  9:  ['外形抜き'],
+  11: ['外形抜き','曲げ'],
+  13: ['外形抜き','曲げ','組立'],
+  15: ['外形抜き','曲げ','組立','溶接'],
+};
+
+function render() {
+  const today = new Date();
+  today.setHours(0,0,0,0);
+
+  document.getElementById('todayBadge').textContent =
+    `TODAY  /  ${today.getFullYear()}年${today.getMonth()+1}月${today.getDate()}日（${WD_JP[today.getDay()]}）`;
+
+  const el = document.getElementById('cards');
+  el.innerHTML = '';
+
+  [9, 11, 13, 15].forEach(n => {
+    const date = addBusinessDays(today, n);
+    const wd = date.getDay();
+    const wdKey = ['sun','mon','tue','wed','thu','fri','sat'][wd];
+    const jpStr = `${date.getFullYear()}年${date.getMonth()+1}月${date.getDate()}日`;
+    const enStr = `${MO_EN[date.getMonth()]} ${String(date.getDate()).padStart(2,'0')}, ${date.getFullYear()}`;
+    const procHtml = PROCESSES[n].map(p => `<span>${p}</span>`).join('');
+
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="card-label">営業日 +${n}</div>
+      <div class="card-corner">DAY ${n}</div>
+      <div class="card-days">${n}<sup>d</sup></div>
+      <div class="card-date-jp">${jpStr}</div>
+      <div class="card-date-en">${enStr}</div>
+      <div class="card-weekday weekday-${wdKey}">${WD_JP[wd]}曜日 / ${WD_EN[wd]}</div>
+      <div class="card-process">${procHtml}</div>
+    `;
+    el.appendChild(card);
+  });
+}
+
+render();
+
+// ── Service Worker 登録 ───────────────────────────
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
+
+// ── PWA インストールバナー（Android Chrome）────────
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  document.getElementById('install-banner').style.display = 'block';
+});
+
+function installApp() {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.then(() => {
+    deferredPrompt = null;
+    document.getElementById('install-banner').style.display = 'none';
+  });
+}
+
+window.addEventListener('appinstalled', () => {
+  document.getElementById('install-banner').style.display = 'none';
+});
+</script>
+</body>
+</html>
