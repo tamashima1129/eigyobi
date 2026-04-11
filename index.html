@@ -295,19 +295,79 @@
     margin-top: 14px;
     padding-top: 12px;
     border-top: 1px solid rgba(180,160,120,0.3);
+  }
+
+  /* 工程タグ（クリック可能） */
+  .proc-tag {
+    display: inline-block;
+    background: rgba(192,57,43,0.08);
+    padding: 3px 10px;
+    margin: 3px 4px 3px 0;
+    border-left: 2px solid var(--accent);
     font-size: 0.8rem;
     font-weight: 600;
     letter-spacing: 0.08em;
     color: var(--accent);
-    line-height: 1.7;
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.2s;
+  }
+  .proc-tag:hover, .proc-tag.open {
+    background: rgba(192,57,43,0.18);
   }
 
-  .card-process span {
-    display: inline-block;
-    background: rgba(192,57,43,0.08);
-    padding: 1px 7px;
-    margin: 2px 3px 2px 0;
-    border-left: 2px solid var(--accent);
+  /* 工程ごとの期限詳細テーブル */
+  .proc-detail {
+    display: none;
+    margin-top: 10px;
+    border: 1px solid rgba(180,160,120,0.3);
+    background: rgba(255,255,255,0.5);
+    overflow: hidden;
+  }
+  .proc-detail.show { display: block; }
+
+  .proc-detail-row {
+    display: flex;
+    align-items: stretch;
+    border-bottom: 1px solid rgba(180,160,120,0.2);
+  }
+  .proc-detail-row:last-child { border-bottom: none; }
+
+  .proc-detail-name {
+    width: 38%;
+    padding: 7px 10px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    color: var(--ink);
+    background: rgba(180,160,120,0.08);
+    display: flex;
+    align-items: center;
+    border-right: 1px solid rgba(180,160,120,0.2);
+  }
+  .proc-detail-name.is-inspection {
+    color: var(--accent);
+  }
+
+  .proc-detail-date {
+    flex: 1;
+    padding: 7px 10px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    letter-spacing: 0.04em;
+  }
+
+  .proc-detail-wd {
+    font-size: 0.62rem;
+    color: var(--muted);
+    padding: 1px 5px;
+    border: 1px solid rgba(180,160,120,0.4);
+    letter-spacing: 0.08em;
   }
 
   .divider {
@@ -446,27 +506,63 @@ const WD_JP = ['日','月','火','水','木','金','土'];
 const WD_EN = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
 const MO_EN = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 
-const PROCESSES = {
-  9:  ['外形抜き'],
-  11: ['外形抜き','曲げ'],
-  13: ['外形抜き','曲げ','組立'],
-  15: ['外形抜き','曲げ','組立','溶接'],
+// ── 工程定義（起算日からの営業日オフセット） ────────
+// 外形抜き:+4, 曲げ:+6, 組立:+8, 溶接:+10, 検査・梱包:最終工程+2
+const CARD_DEFS = {
+  9:  {
+    steps: [
+      { name: '外形抜き', offset: 4 },
+      { name: '検査・梱包', offset: 6, inspection: true },
+    ]
+  },
+  11: {
+    steps: [
+      { name: '外形抜き', offset: 4 },
+      { name: '曲げ',     offset: 6 },
+      { name: '検査・梱包', offset: 8, inspection: true },
+    ]
+  },
+  13: {
+    steps: [
+      { name: '外形抜き', offset: 4 },
+      { name: '曲げ',     offset: 6 },
+      { name: '組立',     offset: 8 },
+      { name: '検査・梱包', offset: 10, inspection: true },
+    ]
+  },
+  15: {
+    steps: [
+      { name: '外形抜き', offset: 4 },
+      { name: '曲げ',     offset: 6 },
+      { name: '組立',     offset: 8 },
+      { name: '溶接',     offset: 10 },
+      { name: '検査・梱包', offset: 12, inspection: true },
+    ]
+  },
 };
+
+function fmtJP(d) {
+  return `${d.getMonth()+1}/${d.getDate()}`;
+}
+
+function toggleDetail(id) {
+  const el = document.getElementById(id);
+  const tag = el.previousElementSibling;
+  el.classList.toggle('show');
+  tag.classList.toggle('open');
+}
 
 function render() {
   const today = new Date();
   today.setHours(0,0,0,0);
 
-  // 起算日オフセット（0=今日, 1=1日前, ...）
   const offset = parseInt(document.getElementById('baseOffset').value) || 0;
   const base = new Date(today);
   base.setDate(base.getDate() - offset);
 
-  // 今日の日付表示
   document.getElementById('todayBadge').textContent =
     `TODAY  /  ${today.getFullYear()}年${today.getMonth()+1}月${today.getDate()}日（${WD_JP[today.getDay()]}）`;
 
-  // 起算日表示
   const baseResult = document.getElementById('baseDateResult');
   if (offset === 0) {
     baseResult.textContent = '';
@@ -478,13 +574,55 @@ function render() {
   const el = document.getElementById('cards');
   el.innerHTML = '';
 
-  [9, 11, 13, 15].forEach(n => {
-    const date = addBusinessDays(base, n);
-    const wd = date.getDay();
+  [9, 11, 13, 15].forEach((n, idx) => {
+    const deadline = addBusinessDays(base, n);
+    const wd = deadline.getDay();
     const wdKey = ['sun','mon','tue','wed','thu','fri','sat'][wd];
-    const jpStr = `${date.getFullYear()}年${date.getMonth()+1}月${date.getDate()}日`;
-    const enStr = `${MO_EN[date.getMonth()]} ${String(date.getDate()).padStart(2,'0')}, ${date.getFullYear()}`;
-    const procHtml = PROCESSES[n].map(p => `<span>${p}</span>`).join('');
+    const jpStr = `${deadline.getFullYear()}年${deadline.getMonth()+1}月${deadline.getDate()}日`;
+    const enStr = `${MO_EN[deadline.getMonth()]} ${String(deadline.getDate()).padStart(2,'0')}, ${deadline.getFullYear()}`;
+
+    // 工程タグ＋詳細ブロックを生成
+    const def = CARD_DEFS[n];
+    const procTagsHtml = def.steps
+      .filter(s => !s.inspection)
+      .map((s, i) => {
+        const detailId = `detail-${n}-${i}`;
+        return `<span class="proc-tag" onclick="toggleDetail('${detailId}')">${s.name}</span>`;
+      }).join('');
+
+    // 各工程タグに対応する期限テーブル
+    const procDetailsHtml = def.steps
+      .filter(s => !s.inspection)
+      .map((s, i) => {
+        const detailId = `detail-${n}-${i}`;
+        // この工程の期限 + 検査・梱包期限
+        const stepDate = addBusinessDays(base, s.offset);
+        const inspStep = def.steps[i + 1]; // 次のステップ
+        // 検査・梱包は最後のステップを探す
+        const inspDef = def.steps[def.steps.length - 1];
+        const inspDate = addBusinessDays(base, inspDef.offset);
+
+        const stepWd = stepDate.getDay();
+        const inspWd = inspDate.getDay();
+
+        return `
+        <div class="proc-detail" id="${detailId}">
+          <div class="proc-detail-row">
+            <div class="proc-detail-name">${s.name}期限</div>
+            <div class="proc-detail-date">
+              ${fmtJP(stepDate)}（${WD_JP[stepWd]}）
+              <span class="proc-detail-wd">${WD_EN[stepWd]}</span>
+            </div>
+          </div>
+          <div class="proc-detail-row">
+            <div class="proc-detail-name is-inspection">検査・梱包期限</div>
+            <div class="proc-detail-date">
+              ${fmtJP(inspDate)}（${WD_JP[inspWd]}）
+              <span class="proc-detail-wd">${WD_EN[inspWd]}</span>
+            </div>
+          </div>
+        </div>`;
+      }).join('');
 
     const card = document.createElement('div');
     card.className = 'card';
@@ -495,7 +633,10 @@ function render() {
       <div class="card-date-jp">${jpStr}</div>
       <div class="card-date-en">${enStr}</div>
       <div class="card-weekday weekday-${wdKey}">${WD_JP[wd]}曜日 / ${WD_EN[wd]}</div>
-      <div class="card-process">${procHtml}</div>
+      <div class="card-process">
+        ${procTagsHtml}
+        ${procDetailsHtml}
+      </div>
     `;
     el.appendChild(card);
   });
