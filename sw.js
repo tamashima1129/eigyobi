@@ -1,4 +1,4 @@
-const CACHE = 'eigyobi-v2';
+const CACHE = 'eigyobi-v3';
 const FILES = ['./index.html'];
 
 self.addEventListener('install', e => {
